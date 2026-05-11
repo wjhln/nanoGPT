@@ -5,9 +5,11 @@ from torch.nn import functional as F
 import math
 from config import Config
 
+
 class GPT(nn.Module):
     def __init__(self, cfg: Config) -> None:
         super().__init__()
+        self.cfg = cfg
         # token embedding：将离散 token id 映射为可学习的连续向量表示
         self.wte = nn.Embedding(cfg.vocab_size, cfg.n_embd)
         # position embedding：为每个位置引入可学习的位置表示，使模型区分 token 的顺序
@@ -62,6 +64,33 @@ class GPT(nn.Module):
             logits = self.lm_head(x[:, [-1], :])
             loss = None
         return logits, loss
+
+    @torch.no_grad()
+    def generate(self, idx, max_new_tokens, temperature=1.0, topk=None):
+        # 最多生成 max_new_tokens 个结果
+        for _ in range(max_new_tokens):
+            # 输入长度不能大于block size，如果超过，保留后面的部分
+            idx_cond = (
+                idx
+                if idx.size(-1) <= self.cfg.block_size
+                else idx[:, -self.cfg.block_size :]
+            )
+            logits, _ = self(idx_cond)
+            # 获取最后一个输出结果的logits， 用temperature控制随机性
+            # temperature < 1, 放大logits差距，token生成更确定
+            logits = logits[:, -1, :] / temperature
+            if topk is not None:
+                # 获取 logits 里的topk，放到v里
+                v, _ = torch.topk(logits, min(topk, logits.size(-1)))
+                # 将 logits 里小于 v 里最小的设置成无穷小
+                logits[logits < v[:, [-1]]] = -float("Inf")
+            # 将打分变成概率分布
+            probs = F.softmax(logits, dim=-1)
+            # 根据得到的概率采样
+            idx_next = torch.multinomial(probs, num_samples=1)
+            # 将此次结果拼接回去
+            idx = torch.cat((idx, idx_next), dim=-1)
+        return idx
 
 
 class Block(nn.Module):
