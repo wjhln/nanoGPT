@@ -37,3 +37,4 @@ class Config:
     resume_from: Optional[str] = None
 
     gradient_accumulation_steps: int = 1
+    grad_clip: float = 1.0

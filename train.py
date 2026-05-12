@@ -97,6 +97,8 @@ class Train:
                 # 当梯度累加的时候，应该用平均loss 来模拟batch size
                 loss = loss / self.cfg.gradient_accumulation_steps
                 loss.backward()
+            # 梯度裁剪，防止梯度过大造成训练不稳定
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.grad_clip)
             # 累加取平均后更新梯度
             self.optimizer.step()
 
