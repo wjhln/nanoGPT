@@ -19,6 +19,13 @@ class Train:
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(), lr=self.cfg.learning_rate
         )
+        os.makedirs(cfg.out_dir, exist_ok=True)
+
+        self.iter_num = 0
+        self.best_val_loss = 1e9
+
+        if cfg.resume_from is not None:
+            self.load_checkpoint(cfg.resume_from)
 
     def get_batch(self, split):
         if split == "train":
@@ -58,17 +65,38 @@ class Train:
             return pickle.load(f)
 
     def train(self):
-        for iter_num in range(self.cfg.max_iters):
-            if iter_num % self.cfg.eval_interval == 0:
+        while self.iter_num < self.cfg.max_iters:
+            self.iter_num += 1
+            if self.iter_num % self.cfg.eval_interval == 0:
                 losses = self.estimate_loss()
+                if losses["val"] < self.best_val_loss:
+                    self.best_val_loss = losses["val"]
+                    self.save_checkpoint(self.cfg.out_dir)
                 print(
-                    f"step: {iter_num}, train loss: {losses['train']}, val loss: {losses['val']}"
+                    f"step: {self.iter_num}, train loss: {losses['train']}, val loss: {losses['val']}"
                 )
             x, y = self.get_batch("train")
             logits, loss = self.model(x, y)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+
+    def save_checkpoint(self, path):
+        checkpoint = {
+            "model": self.model.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "iter_num": self.iter_num,
+            "best_val_loss": self.best_val_loss,
+        }
+        torch.save(checkpoint, os.path.join(path, "ckp.pt"))
+        print(f"saving checkpoint to {path}")
+
+    def load_checkpoint(self, path):
+        checkpoint = torch.load(path, map_location=self.cfg.device)
+        self.model.load_state_dict(checkpoint["model"])
+        self.optimizer.load_state_dict(checkpoint["optimizer"])
+        self.iter_num = checkpoint["iter_num"]
+        self.best_val_loss = checkpoint["best_val_loss"]
 
     @torch.no_grad()
     def estimate_loss(self):
