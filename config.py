@@ -32,6 +32,6 @@ class Config:
     warmup_iters: int = 2000
     lr_decay_iters: int = 100000
     min_lr: float = 6e-5
-
+    weight_decay: float = 1e-1
 
     resume_from: Optional[str] = None

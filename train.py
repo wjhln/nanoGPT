@@ -17,9 +17,18 @@ class Train:
 
         self.model = GPT(self.cfg)
         self.model.to(self.cfg.device)
-        self.optimizer = torch.optim.AdamW(
-            self.model.parameters(), lr=self.cfg.learning_rate
-        )
+
+        # Linear.weight 这种主要学习表达能力，使用weight decay 有助于正则化
+        # bias为偏置项，不承担主要学习表示，没必要做decay
+        # LayerNorm 负责缩放归一化特征，对其做decay没有好处还会影响稳定
+        # Embedding 通常也不做 decay，这里先用 dim>=2 的简化规则
+        decay_params = [p for p in self.model.parameters() if p.dim() >= 2]
+        undecay_params = [p for p in self.model.parameters() if p.dim() < 2]
+        optim_groups = [
+            {"params": decay_params, "weight_decay": cfg.weight_decay},
+            {"params": undecay_params, "weight_decay": 0.0},
+        ]
+        self.optimizer = torch.optim.AdamW(optim_groups, lr=self.cfg.learning_rate)
         os.makedirs(cfg.out_dir, exist_ok=True)
 
         self.iter_num = 0
