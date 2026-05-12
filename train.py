@@ -88,10 +88,16 @@ class Train:
                 print(
                     f"step: {self.iter_num}, train loss: {losses['train']}, val loss: {losses['val']}"
                 )
-            x, y = self.get_batch("train")
-            logits, loss = self.model(x, y)
+
             self.optimizer.zero_grad()
-            loss.backward()
+            # 梯度累加，用这种方式来模拟大batch size训练
+            for micro_step in range(self.cfg.gradient_accumulation_steps):
+                x, y = self.get_batch("train")
+                logits, loss = self.model(x, y)
+                # 当梯度累加的时候，应该用平均loss 来模拟batch size
+                loss = loss / self.cfg.gradient_accumulation_steps
+                loss.backward()
+            # 累加取平均后更新梯度
             self.optimizer.step()
 
     def get_lr(self, it):

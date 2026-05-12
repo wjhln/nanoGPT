@@ -35,3 +35,5 @@ class Config:
     weight_decay: float = 1e-1
 
     resume_from: Optional[str] = None
+
+    gradient_accumulation_steps: int = 1
