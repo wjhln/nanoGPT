@@ -88,7 +88,7 @@ class Train:
             "iter_num": self.iter_num,
             "best_val_loss": self.best_val_loss,
         }
-        torch.save(checkpoint, os.path.join(path, "ckp.pt"))
+        torch.save(checkpoint, os.path.join(path, "ckpt.pt"))
         print(f"saving checkpoint to {path}")
 
     def load_checkpoint(self, path):

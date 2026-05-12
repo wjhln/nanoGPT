@@ -66,7 +66,7 @@ class GPT(nn.Module):
         return logits, loss
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, topk=None):
+    def generate(self, idx, max_new_tokens=100, temperature=1.0, topk=None):
         # 最多生成 max_new_tokens 个结果
         for _ in range(max_new_tokens):
             # 输入长度不能大于block size，如果超过，保留后面的部分
