@@ -41,7 +41,7 @@ class Train:
         if split == "train":
             data = np.memmap(
                 os.path.join(self.data_dir, "train.bin"), dtype=np.uint16, mode="r"
-            )  # 用uint16足够表达字符且省空间
+            )
         else:
             data = np.memmap(
                 os.path.join(self.data_dir, "val.bin"), dtype=np.uint16, mode="r"

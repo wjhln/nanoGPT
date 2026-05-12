@@ -14,7 +14,7 @@ def default_device() -> str:
 @dataclass
 class Config:
     vocab_size: int = 0
-    data_dir: str = "./data/shakespeare_char"
+    data_dir: str = "./data/shakespeare_bpe"
     out_dir: str = "./output"
     n_embd: int = 768
     batch_size: int = 12

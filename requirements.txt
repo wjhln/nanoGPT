@@ -1,3 +1,4 @@
 torch>=2.1
 numpy
 requests
+tiktoken
