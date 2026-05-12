@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from model import GPT
 from config import Config
+import math
 
 
 class Train:
@@ -67,6 +68,9 @@ class Train:
     def train(self):
         while self.iter_num < self.cfg.max_iters:
             self.iter_num += 1
+            lr = self.get_lr(self.iter_num)
+            for param_groups in self.optimizer.param_groups:
+                param_groups["lr"] = lr
             if self.iter_num % self.cfg.eval_interval == 0:
                 losses = self.estimate_loss()
                 if losses["val"] < self.best_val_loss:
@@ -80,6 +84,23 @@ class Train:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+
+    def get_lr(self, it):
+        # 训练开始阶段，学习率直线增长阶段
+        if it < self.cfg.warmup_iters:
+            return (it + 1) / (self.cfg.warmup_iters + 1) * self.cfg.learning_rate
+        # 训练末期，学习率保持最小学习率不变
+        if it > self.cfg.lr_decay_iters:
+            return self.cfg.min_lr
+        # 计算余弦衰减系数
+        decay_ration = (it - self.cfg.warmup_iters) / (
+            self.cfg.lr_decay_iters - self.cfg.warmup_iters
+        )
+        assert 0 <= decay_ration <= 1
+        # 取余弦下降曲线
+        coeff = (math.cos(math.pi * decay_ration) + 1) * 0.5
+        # 中间阶段用余弦下降拼接
+        return self.cfg.min_lr + coeff * (self.cfg.learning_rate - self.cfg.min_lr)
 
     def save_checkpoint(self, path):
         checkpoint = {

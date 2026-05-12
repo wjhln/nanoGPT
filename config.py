@@ -25,9 +25,13 @@ class Config:
     n_layer: int = 12
     n_head: int = 12
 
-    max_iters: int = 10000
+    max_iters: int = 100000
     eval_interval: int = 500
     eval_iters: int = 100
-    learning_rate: float = 3e-4
+    learning_rate: float = 6e-4
+    warmup_iters: int = 2000
+    lr_decay_iters: int = 100000
+    min_lr: float = 6e-5
+
 
     resume_from: Optional[str] = None
