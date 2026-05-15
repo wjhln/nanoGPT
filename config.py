@@ -38,3 +38,7 @@ class Config:
 
     gradient_accumulation_steps: int = 1
     grad_clip: float = 1.0
+    log_interval: int = 10
+    wandb_log: bool = True
+    wandb_project: str = "nanogpt"
+    wandb_run_name: Optional[str] = None

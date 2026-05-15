@@ -7,6 +7,7 @@ from config import Config
 import math
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
+import wandb
 
 
 class Train:
@@ -59,9 +60,16 @@ class Train:
 
         self.iter_num = 0
         self.best_val_loss = 1e9
+        self.wandb_run = None
 
         if cfg.resume_from is not None:
             self.load_checkpoint(cfg.resume_from)
+        if self.master_process and self.cfg.wandb_log:
+            self.wandb_run = wandb.init(
+                project=self.cfg.wandb_project,
+                name=self.cfg.wandb_run_name,
+                config=self.cfg.__dict__,
+            )
 
     def get_batch(self, split):
         if split == "train":
@@ -107,6 +115,7 @@ class Train:
         while self.iter_num < self.cfg.max_iters:
             self.iter_num += 1
             lr = self.get_lr(self.iter_num)
+            last_loss = None
             for param_groups in self.optimizer.param_groups:
                 param_groups["lr"] = lr
             if self.iter_num % self.cfg.eval_interval == 0:
@@ -118,6 +127,16 @@ class Train:
                     print(
                         f"step: {self.iter_num}, train loss: {losses['train']}, val loss: {losses['val']}"
                     )
+                    if self.wandb_run is not None:
+                        self.wandb_run.log(
+                            {
+                                "iter": self.iter_num,
+                                "train/loss": losses["train"],
+                                "val/loss": losses["val"],
+                                "lr": lr,
+                            },
+                            step=self.iter_num,
+                        )
 
             self.optimizer.zero_grad(set_to_none=True)
             # 梯度累加，用这种方式来模拟大batch size训练
@@ -129,12 +148,33 @@ class Train:
                 x, y = self.get_batch("train")
                 logits, loss = self.model(x, y)
                 # 当梯度累加的时候，应该用平均loss 来模拟batch size
+                last_loss = loss.detach().item()
                 loss = loss / self.cfg.gradient_accumulation_steps
                 loss.backward()
             # 梯度裁剪，防止梯度过大造成训练不稳定
             torch.nn.utils.clip_grad_norm_(self.raw_model.parameters(), self.cfg.grad_clip)
             # 累加取平均后更新梯度
             self.optimizer.step()
+            if (
+                self.master_process
+                and self.iter_num % self.cfg.log_interval == 0
+                and last_loss is not None
+            ):
+                print(
+                    f"iter {self.iter_num}/{self.cfg.max_iters} "
+                    f"lr {lr:.6e} train_batch_loss {last_loss:.4f}"
+                )
+                if self.wandb_run is not None:
+                    self.wandb_run.log(
+                        {
+                            "iter": self.iter_num,
+                            "train/batch_loss": last_loss,
+                            "lr": lr,
+                        },
+                        step=self.iter_num,
+                    )
+        if self.wandb_run is not None:
+            self.wandb_run.finish()
         if self.ddp:
             dist.destroy_process_group()
 

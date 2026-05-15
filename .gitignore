@@ -3,3 +3,4 @@ output
 .vscode
 .codex
 __pycache__/
+wandb
