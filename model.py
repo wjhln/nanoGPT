@@ -4,7 +4,7 @@ from torch.nn import functional as F
 
 import math
 from config import Config
-
+from llama import RMSNorm
 
 class GPT(nn.Module):
     def __init__(self, cfg: Config) -> None:
@@ -19,7 +19,7 @@ class GPT(nn.Module):
         # 多层 Transformer Block：交替进行因果注意力的信息聚合和逐 token 的非线性变换
         self.h = nn.ModuleList([Block(cfg) for _ in range(cfg.n_layer)])
         # 规范进入词表投影之前的数值分布
-        self.ln_f = nn.LayerNorm(cfg.n_embd, bias=cfg.bias)
+        self.ln_f = RMSNorm(cfg.n_embd)
         # 把特征映射到词表上每个token的分数
         self.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False)
         # https://paperswithcode.com/method/weight-tying
@@ -97,11 +97,11 @@ class Block(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
         # 规范进入attention之前的数值分布
-        self.ln_1 = nn.LayerNorm(cfg.n_embd, bias=cfg.bias)
+        self.ln_1 = RMSNorm(cfg.n_embd)
         # Attention：在因果 mask 约束下，让当前位置聚合历史 token 信息
         self.attn = CausalSelfAttention(cfg)
         # 规范进入MLP之前的数值分布
-        self.ln_2 = nn.LayerNorm(cfg.n_embd, bias=cfg.bias)
+        self.ln_2 = RMSNorm(cfg.n_embd)
         # MLP：对每个 token 的通道特征独立做非线性变换，不负责跨 token 交互
         self.mlp = MLP(cfg)
 
