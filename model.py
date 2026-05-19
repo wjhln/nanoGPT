@@ -158,18 +158,20 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
+        hidden_dim = cfg.n_embd * 4
         # 映射到更高维度，提升表达能力
-        self.c_fc = nn.Linear(cfg.n_embd, cfg.n_embd * 4, bias=cfg.bias)
-        # 引入非线性，GELU 比 ReLU 更平滑
-        self.gelu = nn.GELU()
+        self.w1 = nn.Linear(cfg.n_embd, hidden_dim, bias=cfg.bias)
+        # 引入非线性 SiLU 门控特征输出
+        self.silu = nn.SiLU()
+        self.w2 = nn.Linear(cfg.n_embd, hidden_dim, bias=cfg.bias)
         # 映射回原主干维度
-        self.c_proj = nn.Linear(cfg.n_embd * 4, cfg.n_embd, bias=cfg.bias)
+        self.w3 = nn.Linear(hidden_dim, cfg.n_embd, bias=cfg.bias)
         # 对MLP输出做正则化，降低某些特征的过度依赖
         self.dropout = nn.Dropout(cfg.dropout)
 
     def forward(self, x):
-        x = self.c_fc(x)
-        x = self.gelu(x)
-        x = self.c_proj(x)
+        value = self.w1(x)
+        gate = self.silu(self.w2(x))
+        x = self.w3(value * gate)
         x = self.dropout(x)
         return x
