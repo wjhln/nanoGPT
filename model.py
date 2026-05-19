@@ -4,7 +4,8 @@ from torch.nn import functional as F
 
 import math
 from config import Config
-from llama import RMSNorm
+from llama import RMSNorm, apply_rotary_pos_embed, get_cos_sin
+
 
 class GPT(nn.Module):
     def __init__(self, cfg: Config) -> None:
@@ -12,8 +13,6 @@ class GPT(nn.Module):
         self.cfg = cfg
         # token embedding：将离散 token id 映射为可学习的连续向量表示
         self.wte = nn.Embedding(cfg.vocab_size, cfg.n_embd)
-        # position embedding：为每个位置引入可学习的位置表示，使模型区分 token 的顺序
-        self.wpe = nn.Embedding(cfg.block_size, cfg.n_embd)
         # 对编码输出做正则化，防止对特定token的过度依赖
         self.drop = nn.Dropout(cfg.dropout)
         # 多层 Transformer Block：交替进行因果注意力的信息聚合和逐 token 的非线性变换
@@ -47,11 +46,8 @@ class GPT(nn.Module):
         device = idx.device
         B, T = idx.shape
 
-        pos = torch.arange(0, T, dtype=torch.long, device=device)
-
         tok_embed = self.wte(idx)
-        pos_embed = self.wpe(pos)
-        x = self.drop(tok_embed + pos_embed)
+        x = self.drop(tok_embed)
         for block in self.h:
             x = block(x)
         x = self.ln_f(x)
@@ -125,6 +121,11 @@ class CausalSelfAttention(nn.Module):
         # 对attention输出做正则化
         self.resid_dropout = nn.Dropout(cfg.dropout)
 
+        head_dim = cfg.n_embd // cfg.n_head
+        self.register_buffer(
+            "inv_freq",
+            1.0 / (10000 ** (torch.arange(0, head_dim, 2).float() / head_dim)),
+        )
         self.register_buffer(
             "bias",
             torch.tril(torch.ones(cfg.block_size, cfg.block_size)).view(
@@ -138,6 +139,11 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, H, T, HC)
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+
+        cos, sin = get_cos_sin(T, self.inv_freq, x.device)
+        q = apply_rotary_pos_embed(q, cos, sin)
+        k = apply_rotary_pos_embed(k, cos, sin)
+
         attn = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))  # (B, H, T, T)
         attn = attn.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
         attn = F.softmax(attn, dim=-1)
